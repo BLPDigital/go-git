@@ -2,12 +2,13 @@ package packp
 
 import (
 	"bytes"
+	"io"
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/format/pktline"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
 
 	. "gopkg.in/check.v1"
-	"io/ioutil"
 )
 
 type UpdReqEncodeSuite struct{}
@@ -126,7 +127,7 @@ func (s *UpdReqEncodeSuite) TestWithPackfile(c *C) {
 
 	packfileContent := []byte("PACKabc")
 	packfileReader := bytes.NewReader(packfileContent)
-	packfileReadCloser := ioutil.NopCloser(packfileReader)
+	packfileReadCloser := io.NopCloser(packfileReader)
 
 	r := NewReferenceUpdateRequest()
 	r.Commands = []*Command{
@@ -139,6 +140,51 @@ func (s *UpdReqEncodeSuite) TestWithPackfile(c *C) {
 		pktline.FlushString,
 	)
 	expected = append(expected, packfileContent...)
+
+	s.testEncode(c, r, expected)
+}
+
+func (s *UpdReqEncodeSuite) TestPushOptions(c *C) {
+	hash1 := plumbing.NewHash("1ecf0ef2c2dffb796033e5a02219af86ec6584e5")
+	hash2 := plumbing.NewHash("2ecf0ef2c2dffb796033e5a02219af86ec6584e5")
+	name := plumbing.ReferenceName("myref")
+
+	r := NewReferenceUpdateRequest()
+	r.Capabilities.Set(capability.PushOptions)
+	r.Commands = []*Command{
+		{Name: name, Old: hash1, New: hash2},
+	}
+	r.Options = []*Option{
+		{Key: "SomeKey", Value: "SomeValue"},
+		{Key: "AnotherKey", Value: "AnotherValue"},
+	}
+
+	expected := pktlines(c,
+		"1ecf0ef2c2dffb796033e5a02219af86ec6584e5 2ecf0ef2c2dffb796033e5a02219af86ec6584e5 myref\x00push-options",
+		pktline.FlushString,
+		"SomeKey=SomeValue",
+		"AnotherKey=AnotherValue",
+		pktline.FlushString,
+	)
+
+	s.testEncode(c, r, expected)
+}
+
+func (s *UpdReqEncodeSuite) TestPushAtomic(c *C) {
+	hash1 := plumbing.NewHash("1ecf0ef2c2dffb796033e5a02219af86ec6584e5")
+	hash2 := plumbing.NewHash("2ecf0ef2c2dffb796033e5a02219af86ec6584e5")
+	name := plumbing.ReferenceName("myref")
+
+	r := NewReferenceUpdateRequest()
+	r.Capabilities.Set(capability.Atomic)
+	r.Commands = []*Command{
+		{Name: name, Old: hash1, New: hash2},
+	}
+
+	expected := pktlines(c,
+		"1ecf0ef2c2dffb796033e5a02219af86ec6584e5 2ecf0ef2c2dffb796033e5a02219af86ec6584e5 myref\x00atomic",
+		pktline.FlushString,
+	)
 
 	s.testEncode(c, r, expected)
 }

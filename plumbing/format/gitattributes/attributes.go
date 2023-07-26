@@ -3,7 +3,6 @@ package gitattributes
 import (
 	"errors"
 	"io"
-	"io/ioutil"
 	"strings"
 )
 
@@ -15,7 +14,7 @@ const (
 
 var (
 	ErrMacroNotAllowed      = errors.New("macro not allowed")
-	ErrInvalidAttributeName = errors.New("Invalid attribute name")
+	ErrInvalidAttributeName = errors.New("invalid attribute name")
 )
 
 type MatchAttribute struct {
@@ -89,7 +88,7 @@ func (a attribute) String() string {
 
 // ReadAttributes reads patterns and attributes from the gitattributes format.
 func ReadAttributes(r io.Reader, domain []string, allowMacro bool) (attributes []MatchAttribute, err error) {
-	data, err := ioutil.ReadAll(r)
+	data, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
