@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/utils/ioutil"
+	"github.com/go-git/go-git/v5/utils/sync"
 )
 
 // See https://github.com/git/git/blob/49fa3dc76179e04b0833542fa52d0f287a4955ac/delta.h
@@ -34,18 +35,16 @@ func ApplyDelta(target, base plumbing.EncodedObject, delta []byte) (err error) {
 
 	defer ioutil.CheckClose(w, &err)
 
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(buf)
-	buf.Reset()
+	buf := sync.GetBytesBuffer()
+	defer sync.PutBytesBuffer(buf)
 	_, err = buf.ReadFrom(r)
 	if err != nil {
 		return err
 	}
 	src := buf.Bytes()
 
-	dst := bufPool.Get().(*bytes.Buffer)
-	defer bufPool.Put(dst)
-	dst.Reset()
+	dst := sync.GetBytesBuffer()
+	defer sync.PutBytesBuffer(dst)
 	err = patchDelta(dst, src, delta)
 	if err != nil {
 		return err
@@ -53,9 +52,9 @@ func ApplyDelta(target, base plumbing.EncodedObject, delta []byte) (err error) {
 
 	target.SetSize(int64(dst.Len()))
 
-	b := byteSlicePool.Get().([]byte)
-	_, err = io.CopyBuffer(w, dst, b)
-	byteSlicePool.Put(b)
+	b := sync.GetByteSlice()
+	_, err = io.CopyBuffer(w, dst, *b)
+	sync.PutByteSlice(b)
 	return err
 }
 
@@ -75,7 +74,7 @@ func PatchDelta(src, delta []byte) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-func ReaderFromDelta(h *ObjectHeader, base plumbing.EncodedObject, deltaRC io.ReadCloser) (io.ReadCloser, error) {
+func ReaderFromDelta(base plumbing.EncodedObject, deltaRC io.Reader) (io.ReadCloser, error) {
 	deltaBuf := bufio.NewReaderSize(deltaRC, 1024)
 	srcSz, err := decodeLEB128ByteReader(deltaBuf)
 	if err != nil {
@@ -140,7 +139,7 @@ func ReaderFromDelta(h *ObjectHeader, base plumbing.EncodedObject, deltaRC io.Re
 				}
 
 				discard := offset - basePos
-				if discard < 0 {
+				if basePos > offset {
 					_ = baseRd.Close()
 					baseRd, err = base.Reader()
 					if err != nil {
